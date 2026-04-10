@@ -533,7 +533,33 @@ html,body {
   100%{ opacity:0; }
 }
 
-/* ── DEPTH METER (ambient) ── */
+/* ── VOICE CONTROLS ── */
+.ai-mic-btn {
+  background:none; border:none; border-left:1px solid var(--border);
+  color:var(--cyan); padding:0 14px; cursor:pointer;
+  transition:color .2s, background .2s;
+  display:flex; align-items:center; justify-content:center;
+}
+.ai-mic-btn:hover { background:rgba(6,182,212,.08); color:white; }
+.ai-mic-btn.listening {
+  color:#f87171;
+  animation:mic-pulse 1s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%,100% { opacity:1; }
+  50%      { opacity:.4; }
+}
+.msg-play-btn {
+  background:none; border:1px solid rgba(6,182,212,.2);
+  color:var(--cyan); font-size:.48rem; letter-spacing:.2em;
+  text-transform:uppercase; padding:4px 10px;
+  cursor:pointer; margin-top:8px; display:inline-flex;
+  align-items:center; gap:6px;
+  transition:background .2s, color .2s;
+}
+.msg-play-btn:hover { background:rgba(6,182,212,.1); color:white; }
+.msg-play-btn.playing { color:#f87171; border-color:rgba(248,113,113,.3); }
+.msg-play-btn svg { width:10px; height:10px; }
 #depth-meter {
   position:fixed; right:28px; top:50%; transform:translateY(-50%);
   z-index:5; opacity:.18; pointer-events:none;
@@ -766,6 +792,14 @@ html,body {
     <div class="ai-thinking" id="ai-thinking"><span class="typing-dots"><span></span><span></span><span></span></span></div>
     <div class="ai-input-row">
       <input class="ai-input" id="ai-input" placeholder="Ask Depth anything..." autocomplete="off"/>
+      <button class="ai-mic-btn" id="ai-mic-btn" onclick="toggleMic()" title="Speak to Depth">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="9" y="2" width="6" height="11" rx="3"/>
+          <path d="M5 10a7 7 0 0014 0"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="8" y1="22" x2="16" y2="22"/>
+        </svg>
+      </button>
       <button class="ai-send" onclick="sendMessage()">Send</button>
     </div>
   </div>
@@ -949,6 +983,9 @@ function closePanel(){
   escHint.classList.remove('show');
   panelOpen=false;
   cursor.className='';
+  // Stop any voice playing
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  if(recognition) recognition.stop();
   setTimeout(()=>{ panelContent.innerHTML=''; },800);
 }
 
@@ -1046,6 +1083,13 @@ async function sendMessage(){
         messages.scrollTop=messages.scrollHeight;
       } else {
         clearInterval(typeInterval);
+        // Add play button after typing completes
+        const playBtn=document.createElement('button');
+        playBtn.className='msg-play-btn';
+        playBtn.innerHTML=`<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Play`;
+        playBtn.onclick=()=>speakText(reply, playBtn);
+        aiMsg.appendChild(playBtn);
+        messages.scrollTop=messages.scrollHeight;
       }
     },18);
 
@@ -1058,6 +1102,111 @@ async function sendMessage(){
     messages.appendChild(errMsg);
     messages.scrollTop=messages.scrollHeight;
   }
+}
+
+// ── VOICE: TEXT TO SPEECH ──
+let currentUtterance = null;
+let currentPlayBtn = null;
+
+function speakText(text, btn){
+  // If already playing this one, stop it
+  if(currentUtterance && currentPlayBtn === btn){
+    window.speechSynthesis.cancel();
+    currentUtterance = null;
+    btn.classList.remove('playing');
+    btn.innerHTML=`<svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10"><polygon points="5,3 19,12 5,21"/></svg> Play`;
+    currentPlayBtn = null;
+    return;
+  }
+  // Stop any other playing
+  if(currentUtterance){
+    window.speechSynthesis.cancel();
+    if(currentPlayBtn){
+      currentPlayBtn.classList.remove('playing');
+      currentPlayBtn.innerHTML=`<svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10"><polygon points="5,3 19,12 5,21"/></svg> Play`;
+    }
+  }
+  const utter = new SpeechSynthesisUtterance(text);
+  // Pick the best available voice — calm, measured
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = ['Daniel', 'Google UK English Male', 'Alex', 'Fred'];
+  let chosen = voices.find(v => preferred.some(p => v.name.includes(p)));
+  if(!chosen) chosen = voices.find(v => v.lang === 'en-GB' && v.name.toLowerCase().includes('male'));
+  if(!chosen) chosen = voices.find(v => v.lang.startsWith('en'));
+  if(chosen) utter.voice = chosen;
+  utter.rate = 0.88;   // slightly slower — measured and calm
+  utter.pitch = 0.9;   // slightly lower
+  utter.volume = 1;
+  btn.classList.add('playing');
+  btn.innerHTML=`<svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Stop`;
+  currentUtterance = utter;
+  currentPlayBtn = btn;
+  utter.onend = () => {
+    btn.classList.remove('playing');
+    btn.innerHTML=`<svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10"><polygon points="5,3 19,12 5,21"/></svg> Play`;
+    currentUtterance = null;
+    currentPlayBtn = null;
+  };
+  window.speechSynthesis.speak(utter);
+}
+
+// ── VOICE: SPEECH TO TEXT ──
+let recognition = null;
+let isListening = false;
+
+function toggleMic(){
+  if(!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)){
+    alert('Voice input is not supported in this browser. Please use Chrome.');
+    return;
+  }
+  if(isListening){
+    stopMic();
+  } else {
+    startMic();
+  }
+}
+
+function startMic(){
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  const micBtn = document.getElementById('ai-mic-btn');
+  const input = document.getElementById('ai-input');
+
+  recognition.onstart = () => {
+    isListening = true;
+    if(micBtn) micBtn.classList.add('listening');
+    if(input) input.placeholder = 'Listening...';
+  };
+  recognition.onresult = (e) => {
+    const transcript = Array.from(e.results)
+      .map(r => r[0].transcript).join('');
+    if(input) input.value = transcript;
+  };
+  recognition.onend = () => {
+    isListening = false;
+    if(micBtn) micBtn.classList.remove('listening');
+    if(input) input.placeholder = 'Ask Depth anything...';
+    // Auto send if we got something
+    const inp = document.getElementById('ai-input');
+    if(inp && inp.value.trim()) sendMessage();
+  };
+  recognition.onerror = () => {
+    isListening = false;
+    if(micBtn) micBtn.classList.remove('listening');
+    if(input) input.placeholder = 'Ask Depth anything...';
+  };
+  recognition.start();
+}
+
+function stopMic(){
+  if(recognition) recognition.stop();
+  isListening = false;
+  const micBtn = document.getElementById('ai-mic-btn');
+  if(micBtn) micBtn.classList.remove('listening');
 }
 
 function setWaveformActive(active){
