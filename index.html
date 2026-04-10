@@ -1074,7 +1074,7 @@ async function sendMessage(){
     messages.appendChild(aiMsg);
     messages.scrollTop=messages.scrollHeight;
 
-    // Typewriter effect
+    // Typewriter effect — then auto speak
     const textEl=aiMsg.querySelector('.msg-text');
     let i=0;
     const typeInterval=setInterval(()=>{
@@ -1083,13 +1083,8 @@ async function sendMessage(){
         messages.scrollTop=messages.scrollHeight;
       } else {
         clearInterval(typeInterval);
-        // Add play button after typing completes
-        const playBtn=document.createElement('button');
-        playBtn.className='msg-play-btn';
-        playBtn.innerHTML=`<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg> Play`;
-        playBtn.onclick=()=>speakText(reply, playBtn);
-        aiMsg.appendChild(playBtn);
-        messages.scrollTop=messages.scrollHeight;
+        // Auto speak when typing completes
+        speakText(reply);
       }
     },18);
 
@@ -1106,47 +1101,25 @@ async function sendMessage(){
 
 // ── VOICE: TEXT TO SPEECH ──
 let currentUtterance = null;
-let currentPlayBtn = null;
 
-function speakText(text, btn){
-  // If already playing this one, stop it
-  if(currentUtterance && currentPlayBtn === btn){
-    window.speechSynthesis.cancel();
-    currentUtterance = null;
-    btn.classList.remove('playing');
-    btn.innerHTML=`<svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10"><polygon points="5,3 19,12 5,21"/></svg> Play`;
-    currentPlayBtn = null;
-    return;
-  }
-  // Stop any other playing
+function speakText(text){
+  // Cancel any current speech
   if(currentUtterance){
     window.speechSynthesis.cancel();
-    if(currentPlayBtn){
-      currentPlayBtn.classList.remove('playing');
-      currentPlayBtn.innerHTML=`<svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10"><polygon points="5,3 19,12 5,21"/></svg> Play`;
-    }
+    currentUtterance = null;
   }
   const utter = new SpeechSynthesisUtterance(text);
-  // Pick the best available voice — calm, measured
   const voices = window.speechSynthesis.getVoices();
   const preferred = ['Daniel', 'Google UK English Male', 'Alex', 'Fred'];
   let chosen = voices.find(v => preferred.some(p => v.name.includes(p)));
   if(!chosen) chosen = voices.find(v => v.lang === 'en-GB' && v.name.toLowerCase().includes('male'));
   if(!chosen) chosen = voices.find(v => v.lang.startsWith('en'));
   if(chosen) utter.voice = chosen;
-  utter.rate = 0.88;   // slightly slower — measured and calm
-  utter.pitch = 0.9;   // slightly lower
+  utter.rate = 0.88;
+  utter.pitch = 0.9;
   utter.volume = 1;
-  btn.classList.add('playing');
-  btn.innerHTML=`<svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Stop`;
+  utter.onend = () => { currentUtterance = null; };
   currentUtterance = utter;
-  currentPlayBtn = btn;
-  utter.onend = () => {
-    btn.classList.remove('playing');
-    btn.innerHTML=`<svg viewBox="0 0 24 24" fill="currentColor" width="10" height="10"><polygon points="5,3 19,12 5,21"/></svg> Play`;
-    currentUtterance = null;
-    currentPlayBtn = null;
-  };
   window.speechSynthesis.speak(utter);
 }
 
