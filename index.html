@@ -169,6 +169,27 @@ html,body {
 }
 .nav-connector.visible { opacity:.25; }
 
+/* ── COMPANY NAME ── */
+#company-name {
+  position:absolute;
+  top:-80px; left:50%;
+  transform:translateX(-50%);
+  white-space:nowrap;
+  font-family:'Space Mono', monospace;
+  font-size:3.5rem; font-weight:700;
+  letter-spacing:.25em; text-transform:uppercase;
+  color:rgba(255,255,255,0.07);
+  pointer-events:none;
+  transition:color 1.2s ease, text-shadow 1.2s ease;
+  z-index:2;
+}
+#logo-hub:hover #company-name,
+#logo-hub.labels-visible #company-name {
+  color:rgba(255,255,255,0.82);
+  text-shadow:0 0 60px rgba(6,182,212,0.25);
+}
+#logo-hub.ghost #company-name { display:none; }
+
 /* ── TAGLINE (below logo, always) ── */
 #tagline {
   position:absolute; bottom:-64px; left:50%; transform:translateX(-50%);
@@ -605,6 +626,9 @@ html,body {
     <div class="nav-label" data-section="projects">Projects</div>
     <div class="nav-label" data-section="contact">Contact</div>
 
+    <!-- Company name — dim, brightens on logo hover -->
+    <div id="company-name">Equal&nbsp;Depth&nbsp;Analytics</div>
+
     <!-- The mark -->
     <svg class="logo-svg" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -936,9 +960,11 @@ function checkProximity(x,y){
   if(near){
     cursor.className='near-logo';
     labels.forEach(l=>l.classList.add('visible'));
+    logoHub.classList.add('labels-visible');
   } else {
     cursor.className='';
     labels.forEach(l=>l.classList.remove('visible'));
+    logoHub.classList.remove('labels-visible');
   }
 }
 
@@ -1213,10 +1239,12 @@ const isMobile = () => window.innerWidth <= 900;
 function openMobileMenu(){
   const mm = document.getElementById('mobile-menu');
   if(mm) mm.classList.add('open');
+  logoHub.classList.add('labels-visible');
 }
 function closeMobileMenu(){
   const mm = document.getElementById('mobile-menu');
   if(mm) mm.classList.remove('open');
+  logoHub.classList.remove('labels-visible');
 }
 function mobileOpenSection(section){
   closeMobileMenu();
