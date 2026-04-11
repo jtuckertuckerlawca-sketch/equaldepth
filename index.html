@@ -182,7 +182,9 @@ html,body {
   pointer-events:none;
   transition:color 1.2s ease, text-shadow 1.2s ease;
   z-index:2;
+  text-align:center;
 }
+#company-name br { display:none; }
 #logo-hub:hover #company-name,
 #logo-hub.labels-visible #company-name {
   color:rgba(255,255,255,0.82);
@@ -471,6 +473,16 @@ html,body {
 }
 
 @media(max-width:900px){
+  #company-name {
+    font-size:1.6rem;
+    letter-spacing:.15em;
+    top:-88px;
+    white-space:normal;
+    text-align:center;
+    width:280px;
+    line-height:1.3;
+  }
+  #company-name br { display:block; }
   /* Hide desktop nav labels completely on mobile */
   .nav-label { display:none !important; }
 
@@ -615,15 +627,6 @@ html,body {
 .msg-play-btn:hover { background:rgba(6,182,212,.1); color:white; }
 .msg-play-btn.playing { color:#f87171; border-color:rgba(248,113,113,.3); }
 .msg-play-btn svg { width:10px; height:10px; }
-#depth-meter {
-  position:fixed; right:28px; top:50%; transform:translateY(-50%);
-  z-index:5; opacity:.18; pointer-events:none;
-  display:flex;flex-direction:column;align-items:center;gap:6px;
-}
-.dm-label{font-size:.42rem;letter-spacing:.2em;color:var(--mid);writing-mode:vertical-rl;}
-.dm-bar{width:1px;height:100px;background:linear-gradient(to bottom,var(--cyan),var(--deep));}
-.dm-tick{font-size:.4rem;letter-spacing:.1em;color:var(--mid);}
-
 /* ── WAVEFORM ANIMATION (AI) ── */
 @keyframes wave-bar {
   0%,100%{transform:scaleY(.3);}
@@ -642,13 +645,6 @@ html,body {
 <div class="rays"><div class="ray"></div><div class="ray"></div><div class="ray"></div><div class="ray"></div><div class="ray"></div></div>
 <div class="grain"></div>
 
-<!-- Ambient depth meter -->
-<div id="depth-meter">
-  <div class="dm-label">DEPTH</div>
-  <div class="dm-bar"></div>
-  <div class="dm-tick">∞</div>
-</div>
-
 <!-- STAGE -->
 <div id="stage">
   <div id="logo-hub" onclick="handleLogoClick()">
@@ -663,7 +659,7 @@ html,body {
     <div class="nav-label" data-section="contact">Contact</div>
 
     <!-- Company name — dim, brightens on logo hover -->
-    <div id="company-name">Equal&nbsp;Depth&nbsp;Analytics</div>
+    <div id="company-name">Equal&nbsp;Depth<br>Analytics</div>
 
     <!-- The mark -->
     <svg class="logo-svg" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
