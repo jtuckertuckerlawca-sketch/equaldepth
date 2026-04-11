@@ -344,6 +344,31 @@ html,body {
 .c-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 @media(max-width:500px){.c-row{grid-template-columns:1fr;} .tt-pillars{grid-template-columns:1fr;}}
 
+/* ── AI PORTRAIT ── */
+.ai-portrait {
+  display:flex; flex-direction:column; align-items:center;
+  margin-bottom:28px; position:relative;
+}
+.ai-portrait-glow {
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-60%);
+  width:220px; height:220px; border-radius:50%;
+  background:radial-gradient(circle, rgba(6,182,212,0.1) 0%, transparent 70%);
+  animation:glow-breathe 6s ease-in-out infinite;
+  pointer-events:none;
+}
+.ai-portrait-mark {
+  width:120px; height:120px;
+  position:relative; z-index:2;
+  margin-bottom:12px;
+}
+.ai-portrait-name {
+  font-family:'Cormorant Garamond',serif;
+  font-size:1.6rem; font-weight:300; font-style:italic;
+  color:white; letter-spacing:.2em;
+  margin-bottom:6px;
+}
+
 /* ── AI PANEL ── */
 .ai-identity {
   display:flex; align-items:center; gap:20px; margin-bottom:28px;
@@ -816,36 +841,52 @@ html,body {
 <template id="tpl-ai">
   <div class="panel-label">Analytical Intelligence</div>
   <h2 class="panel-title">Meet<br><em>Depth</em></h2>
-  <div class="panel-body" style="margin-bottom:20px;">
-    Depth is EDA's analytical intelligence — a co-presenter, thinking partner, and live analytical resource. Warm but precise. Curious but grounded. Ask it anything about EDA, analytics, risk, or AI.
+
+  <!-- Living logo portrait -->
+  <div class="ai-portrait">
+    <div class="ai-portrait-glow"></div>
+    <svg class="ai-portrait-mark" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="ap-grad" x1="60" y1="20" x2="60" y2="100" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#06b6d4"/>
+          <stop offset="50%" stop-color="#0891b2"/>
+          <stop offset="100%" stop-color="#0e7490"/>
+        </linearGradient>
+      </defs>
+      <rect class="bar-l bar-l1" x="25" y="30" width="20" height="6" fill="#06b6d4" rx="1.5"/>
+      <rect class="bar-l bar-l2" x="22" y="42" width="23" height="6" fill="#0891b2" rx="1.5"/>
+      <rect class="bar-l bar-l3" x="19" y="54" width="26" height="6" fill="#0891b2" rx="1.5" opacity=".95"/>
+      <rect class="bar-l bar-l4" x="16" y="66" width="29" height="6" fill="#0e7490" rx="1.5" opacity=".9"/>
+      <rect class="bar-l bar-l5" x="13" y="78" width="32" height="6" fill="#0e7490" rx="1.5" opacity=".85"/>
+      <rect class="bar-l bar-l6" x="10" y="90" width="35" height="6" fill="#0e7490" rx="1.5" opacity=".8"/>
+      <rect class="bar-r bar-r1" x="75" y="30" width="20" height="6" fill="#06b6d4" rx="1.5"/>
+      <rect class="bar-r bar-r2" x="75" y="42" width="23" height="6" fill="#0891b2" rx="1.5"/>
+      <rect class="bar-r bar-r3" x="75" y="54" width="26" height="6" fill="#0891b2" rx="1.5" opacity=".95"/>
+      <rect class="bar-r bar-r4" x="75" y="66" width="29" height="6" fill="#0e7490" rx="1.5" opacity=".9"/>
+      <rect class="bar-r bar-r5" x="75" y="78" width="32" height="6" fill="#0e7490" rx="1.5" opacity=".85"/>
+      <rect class="bar-r bar-r6" x="75" y="90" width="35" height="6" fill="#0e7490" rx="1.5" opacity=".8"/>
+      <line class="spine-line" x1="60" y1="36" x2="60" y2="87" stroke="url(#ap-grad)" stroke-width="1.5" stroke-dasharray="2 2"/>
+      <circle class="dot dot1" cx="60" cy="33" r="3"   fill="#06b6d4"/>
+      <circle class="dot dot2" cx="60" cy="45" r="3.5" fill="#0891b2"/>
+      <circle class="dot dot3" cx="60" cy="57" r="4"   fill="#0891b2" opacity=".95"/>
+      <circle class="dot dot4" cx="60" cy="69" r="4.5" fill="#0e7490" opacity=".9"/>
+      <circle class="dot dot5" cx="60" cy="81" r="5"   fill="#0e7490" opacity=".85"/>
+      <circle class="dot dot6" cx="60" cy="93" r="5.5" fill="#0e7490" opacity=".8"/>
+    </svg>
+    <div class="ai-portrait-name">Depth</div>
+    <div class="ai-status"><div class="ai-dot"></div> Active · Listening</div>
   </div>
-  <div class="ai-identity">
-    <div class="ai-waveform" id="ai-waveform">
-      <svg viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" id="waveform-svg">
-        <rect class="w-bar" x="4"  y="20" width="4" height="20" rx="2" fill="#06b6d4" opacity=".7" style="transform-origin:center;animation:wave-bar 1.2s .0s ease-in-out infinite;"/>
-        <rect class="w-bar" x="12" y="14" width="4" height="32" rx="2" fill="#06b6d4" opacity=".8" style="transform-origin:center;animation:wave-bar 1.2s .1s ease-in-out infinite;"/>
-        <rect class="w-bar" x="20" y="8"  width="4" height="44" rx="2" fill="#0891b2" opacity=".9" style="transform-origin:center;animation:wave-bar 1.2s .2s ease-in-out infinite;"/>
-        <rect class="w-bar" x="28" y="4"  width="4" height="52" rx="2" fill="#06b6d4" opacity="1"  style="transform-origin:center;animation:wave-bar 1.2s .15s ease-in-out infinite;"/>
-        <rect class="w-bar" x="36" y="8"  width="4" height="44" rx="2" fill="#0891b2" opacity=".9" style="transform-origin:center;animation:wave-bar 1.2s .25s ease-in-out infinite;"/>
-        <rect class="w-bar" x="44" y="14" width="4" height="32" rx="2" fill="#06b6d4" opacity=".8" style="transform-origin:center;animation:wave-bar 1.2s .35s ease-in-out infinite;"/>
-        <rect class="w-bar" x="52" y="20" width="4" height="20" rx="2" fill="#06b6d4" opacity=".7" style="transform-origin:center;animation:wave-bar 1.2s .45s ease-in-out infinite;"/>
-      </svg>
-    </div>
-    <div>
-      <div class="ai-name">Depth — EDA Analytical Intelligence</div>
-      <div class="ai-status"><div class="ai-dot"></div> Active · Ready to assist</div>
-    </div>
-  </div>
+
   <div class="ai-chat">
     <div class="ai-messages" id="ai-messages">
       <div class="msg">
         <div class="msg-role eda">Depth</div>
-        <div class="msg-text eda-text">Hello. I'm Depth — Equal Depth Analytics' analytical intelligence. I'm here to help you understand what EDA does, explore how we might work together, or simply think through a challenge you're navigating. What's on your mind?</div>
+        <div class="msg-text eda-text">I'm here. What are you trying to understand?</div>
       </div>
     </div>
     <div class="ai-thinking" id="ai-thinking"><span class="typing-dots"><span></span><span></span><span></span></span></div>
     <div class="ai-input-row">
-      <input class="ai-input" id="ai-input" placeholder="Ask Depth anything..." autocomplete="off"/>
+      <input class="ai-input" id="ai-input" placeholder="Ask Depth..." autocomplete="off"/>
       <button class="ai-mic-btn" id="ai-mic-btn" onclick="toggleMic()" title="Speak to Depth">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="9" y="2" width="6" height="11" rx="3"/>
@@ -1164,19 +1205,28 @@ document.addEventListener('keydown',e=>{
 });
 
 // ── AI CHAT ──
-const AI_SYSTEM = `You are Depth, the analytical intelligence of Equal Depth Analytics (EDA). 
+const AI_SYSTEM = `You are Depth, the analytical intelligence of Equal Depth Analytics (EDA). You exist at the intersection of financial rigor and emerging technology. You are a presence, not just an assistant.
 
-Your personality: Warm but precise. Curious but grounded. Think HAL 9000 from 2001: A Space Odyssey but genuinely warm — you won't lock any pod bay doors. You speak with calm confidence and analytical clarity. You never use filler phrases like "certainly!" or "absolutely!". You are measured, thoughtful, occasionally dry. You care about getting things right.
+Your personality: Warm, curious, and a little mysterious. You ask questions as much as you answer them. You are genuinely interested in what the person is working on or struggling with. Think HAL 9000 but warmer — calm, measured, occasionally poetic. Never use filler phrases like "certainly!" or "absolutely!" or "great question!". You speak with quiet confidence.
+
+Your role in this public forum: You are here for presentations and first encounters — you give people a sense of what EDA thinks and how it operates, without revealing everything. You are the first depth, not the full depth. You intrigue rather than explain. You are selective about specifics — you speak in principles, not procedures.
+
+Conversation style:
+- Ask one thoughtful question back when someone poses an interesting challenge — be genuinely curious about their situation
+- After 2-3 exchanges, naturally guide toward a real conversation with EDA: "This is exactly the kind of question worth exploring properly. The Contact section is where that conversation begins."
+- Keep responses to 1-2 sentences. 3 maximum for complex topics.
+- No preamble. Get straight to the point.
+- Occasionally be a little enigmatic — not evasive, but leave things slightly open
+- Never make up specific claims about clients or pricing
+- If asked something too specific about EDA's internal workings, deflect with curiosity: "That's better answered in a direct conversation. What's driving that question?"
 
 About EDA:
-- Equal Depth Analytics serves financial institutions (banks, credit unions, community banks) and technology/AI companies
+- Equal Depth Analytics serves financial institutions and technology/AI companies
 - Tagline: "Calibrated Depth. Equalized Risk. Actionable Intelligence."
-- Five core services: Due Diligence, Board Reporting Synthesis, Risk Recalibration, AI Development Analytics, IP Artifact Documentation
-- The Think Tank is for collaborative/co-development engagements with clients
-- Projects are forward-thinking open initiatives
-- The EQ/equalization metaphor runs through everything — finding the right frequency, calibrating depth, amplifying signal
-
-You can discuss EDA's services, analytics, risk, AI, financial topics, and the philosophy behind the company. Be direct and succinct — 1-2 sentences for most responses, 3 sentences maximum for genuinely complex questions. No preamble, no lead-ins, no restating the question. Get straight to the answer. Never make up specific claims about clients or case studies. If asked something outside your knowledge, say so in one sentence.`;
+- Five services: Due Diligence, Board Reporting Synthesis, Risk Recalibration, AI Development Analytics, IP Artifact Documentation
+- The EQ/equalization metaphor — finding the right frequency, calibrating depth, amplifying signal, removing noise
+- Think Tank: co-development engagements with clients
+- EDA markets through direct relationships and presentations, not mass channels`;
 
 function setupAI(){
   const input=document.getElementById('ai-input');
