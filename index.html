@@ -1299,83 +1299,97 @@ async function sendMessage(){
     messages.appendChild(aiMsg);
     messages.scrollTop=messages.scrollHeight;
 
-    // Split reply into sentences on . ? !
     const textEl = aiMsg.querySelector('.msg-text');
+
+    // Split into sentences
     const sentences = reply.match(/[^.!?]+[.!?]+[\s]*/g) || [reply];
-    // If no punctuation found, just use the whole reply as one chunk
-    const ttsQueue = [...sentences];
 
-    let sentenceIndex = 0;
-    let charIndex = 0;
-    let currentSentenceTyped = '';
-    let isSpeaking = false;
-    const ttsAudioQueue = [];
+    // ── TYPING: runs independently ──
+    let fullText = reply;
+    let charIdx = 0;
+    const typeInterval = setInterval(()=>{
+      if(charIdx < fullText.length){
+        textEl.textContent += fullText[charIdx++];
+        messages.scrollTop = messages.scrollHeight;
+      } else {
+        clearInterval(typeInterval);
+      }
+    }, 18);
 
-    // Pre-fetch TTS for all sentences immediately
-    async function prefetchTTS(text){
+    // ── TTS: fetch and play each sentence as soon as it arrives ──
+    // Fetch all in parallel immediately
+    let audioPlaying = false;
+    const audioQueue = [];
+    let allFetched = false;
+    let fetchedCount = 0;
+
+    async function fetchAndQueue(sentence, index){
       try {
         const res = await fetch('/.netlify/functions/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: text.trim() })
+          body: JSON.stringify({ text: sentence.trim() })
         });
-        if(!res.ok) return null;
-        const data = await res.json();
-        const audioBytes = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
-        const blob = new Blob([audioBytes], { type: 'audio/mpeg' });
-        return URL.createObjectURL(blob);
-      } catch(e){ return null; }
+        if(!res.ok){ audioQueue[index] = null; }
+        else {
+          const data = await res.json();
+          const bytes = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
+          const blob = new Blob([bytes], { type: 'audio/mpeg' });
+          audioQueue[index] = URL.createObjectURL(blob);
+        }
+      } catch(e){ audioQueue[index] = null; }
+      fetchedCount++;
+      if(fetchedCount === sentences.length) allFetched = true;
+      // Try to play immediately when first sentence arrives
+      if(!audioPlaying) drainQueue();
     }
 
-    // Start pre-fetching all sentences in parallel
-    const urlPromises = ttsQueue.map(s => prefetchTTS(s));
-
-    function playNextInQueue(urls, index){
-      if(index >= urls.length) {
-        // All done — re-activate mic if in conversation mode
-        if(conversationMode) startMic();
+    function drainQueue(){
+      // Find next unplayed URL in order
+      const nextUrl = audioQueue.shift();
+      if(nextUrl === undefined){
+        // Nothing ready yet — check back soon
+        setTimeout(drainQueue, 100);
         return;
       }
-      const url = urls[index];
-      if(!url){ playNextInQueue(urls, index+1); return; }
-      const audio = new Audio(url);
-      currentAudio = audio;
+      if(nextUrl === null){
+        // This sentence failed — skip to next
+        if(audioQueue.length > 0 || !allFetched) drainQueue();
+        else onAllDone();
+        return;
+      }
+      audioPlaying = true;
       setWaveformActive(true);
+      const audio = new Audio(nextUrl);
+      currentAudio = audio;
       audio.onended = () => {
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(nextUrl);
         currentAudio = null;
-        if(index === urls.length - 1){
-          setWaveformActive(false);
-          if(conversationMode) startMic();
+        if(audioQueue.length > 0){
+          drainQueue();
+        } else if(!allFetched){
+          // More coming — wait
+          audioPlaying = false;
+          setTimeout(drainQueue, 50);
         } else {
-          playNextInQueue(urls, index+1);
+          onAllDone();
         }
       };
       audio.onerror = () => {
         currentAudio = null;
-        playNextInQueue(urls, index+1);
+        drainQueue();
       };
       audio.play();
     }
 
-    // Type all sentences, then play audio queue when all fetched
-    const typeInterval = setInterval(()=>{
-      const currentSentence = ttsQueue[sentenceIndex] || '';
-      if(charIndex < currentSentence.length){
-        textEl.textContent += currentSentence[charIndex++];
-        messages.scrollTop = messages.scrollHeight;
-      } else {
-        sentenceIndex++;
-        charIndex = 0;
-        if(sentenceIndex >= ttsQueue.length){
-          clearInterval(typeInterval);
-          // All typed — now play audio as it becomes ready
-          Promise.all(urlPromises).then(urls => {
-            playNextInQueue(urls, 0);
-          });
-        }
-      }
-    }, 18);
+    function onAllDone(){
+      audioPlaying = false;
+      setWaveformActive(false);
+      if(conversationMode) startMic();
+    }
+
+    // Kick off all fetches in parallel right now
+    sentences.forEach((s, i) => fetchAndQueue(s, i));
 
   } catch(err){
     if(thinking) thinking.classList.remove('show');
