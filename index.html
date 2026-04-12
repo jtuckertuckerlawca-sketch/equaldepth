@@ -1191,8 +1191,8 @@ function closePanel(){
   panelOpen=false;
   cursor.className='';
   // Stop any voice playing
-  window.speechSynthesis && window.speechSynthesis.cancel();
-  if(recognition) recognition.stop();
+  if(currentAudio){ currentAudio.pause(); currentAudio = null; }
+  if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   setTimeout(()=>{ panelContent.innerHTML=''; },800);
 }
 
@@ -1315,39 +1315,53 @@ async function sendMessage(){
   }
 }
 
-// ── VOICE: TEXT TO SPEECH ──
-let currentUtterance = null;
+// ── VOICE: ELEVENLABS TTS ──
+let currentAudio = null;
 
-function speakText(text){
-  // Cancel any current speech
-  if(currentUtterance){
-    window.speechSynthesis.cancel();
-    currentUtterance = null;
+async function speakText(text){
+  // Stop any currently playing audio
+  if(currentAudio){
+    currentAudio.pause();
+    currentAudio = null;
   }
-  const utter = new SpeechSynthesisUtterance(text);
-  const voices = window.speechSynthesis.getVoices();
-  const preferred = ['Daniel', 'Google UK English Male', 'Alex', 'Fred'];
-  let chosen = voices.find(v => preferred.some(p => v.name.includes(p)));
-  if(!chosen) chosen = voices.find(v => v.lang === 'en-GB' && v.name.toLowerCase().includes('male'));
-  if(!chosen) chosen = voices.find(v => v.lang.startsWith('en'));
-  if(chosen) utter.voice = chosen;
-  utter.rate = 0.88;
-  utter.pitch = 0.9;
-  utter.volume = 1;
-  utter.onend = () => { currentUtterance = null; };
-  currentUtterance = utter;
-  window.speechSynthesis.speak(utter);
+  // Animate portrait mark while speaking
+  setWaveformActive(true);
+  try {
+    const res = await fetch('/.netlify/functions/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    if(!res.ok) throw new Error('TTS failed');
+    const data = await res.json();
+    // Decode base64 audio and play
+    const audioBytes = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
+    const blob = new Blob([audioBytes], { type: 'audio/mpeg' });
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+    audio.onended = () => {
+      setWaveformActive(false);
+      URL.revokeObjectURL(url);
+      currentAudio = null;
+    };
+    audio.onerror = () => {
+      setWaveformActive(false);
+      currentAudio = null;
+    };
+    audio.play();
+  } catch(err) {
+    console.error('TTS error:', err);
+    setWaveformActive(false);
+  }
 }
 
-// ── VOICE: SPEECH TO TEXT ──
-let recognition = null;
+// ── VOICE: ELEVENLABS STT ──
+let mediaRecorder = null;
+let audioChunks = [];
 let isListening = false;
 
 function toggleMic(){
-  if(!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)){
-    alert('Voice input is not supported in this browser. Please use Chrome.');
-    return;
-  }
   if(isListening){
     stopMic();
   } else {
@@ -1355,44 +1369,61 @@ function toggleMic(){
   }
 }
 
-function startMic(){
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  recognition = new SpeechRecognition();
-  recognition.continuous = false;
-  recognition.interimResults = true;
-  recognition.lang = 'en-US';
-
+async function startMic(){
   const micBtn = document.getElementById('ai-mic-btn');
-  const input = document.getElementById('ai-input');
-
-  recognition.onstart = () => {
+  const input  = document.getElementById('ai-input');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+    mediaRecorder.ondataavailable = e => {
+      if(e.data.size > 0) audioChunks.push(e.data);
+    };
+    mediaRecorder.onstop = async () => {
+      // Stop all tracks
+      stream.getTracks().forEach(t => t.stop());
+      if(micBtn) { micBtn.classList.remove('listening'); }
+      if(input)  { input.placeholder = 'Transcribing...'; }
+      isListening = false;
+      try {
+        const blob = new Blob(audioChunks, { type: 'audio/webm' });
+        // Convert to base64
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64 = reader.result.split(',')[1];
+          const res = await fetch('/.netlify/functions/stt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ audio: base64, mimeType: 'audio/webm' })
+          });
+          const data = await res.json();
+          const transcript = data.transcript || '';
+          if(input) {
+            input.value = transcript;
+            input.placeholder = 'Ask Depth...';
+          }
+          if(transcript.trim()) sendMessage();
+        };
+        reader.readAsDataURL(blob);
+      } catch(err) {
+        console.error('STT error:', err);
+        if(input) input.placeholder = 'Ask Depth...';
+      }
+    };
+    mediaRecorder.start();
     isListening = true;
     if(micBtn) micBtn.classList.add('listening');
-    if(input) input.placeholder = 'Listening...';
-  };
-  recognition.onresult = (e) => {
-    const transcript = Array.from(e.results)
-      .map(r => r[0].transcript).join('');
-    if(input) input.value = transcript;
-  };
-  recognition.onend = () => {
-    isListening = false;
-    if(micBtn) micBtn.classList.remove('listening');
-    if(input) input.placeholder = 'Ask Depth anything...';
-    // Auto send if we got something
-    const inp = document.getElementById('ai-input');
-    if(inp && inp.value.trim()) sendMessage();
-  };
-  recognition.onerror = () => {
-    isListening = false;
-    if(micBtn) micBtn.classList.remove('listening');
-    if(input) input.placeholder = 'Ask Depth anything...';
-  };
-  recognition.start();
+    if(input)  input.placeholder = 'Listening...';
+  } catch(err) {
+    console.error('Mic error:', err);
+    alert('Microphone access is required. Please allow microphone access and try again.');
+  }
 }
 
 function stopMic(){
-  if(recognition) recognition.stop();
+  if(mediaRecorder && mediaRecorder.state !== 'inactive'){
+    mediaRecorder.stop();
+  }
   isListening = false;
   const micBtn = document.getElementById('ai-mic-btn');
   if(micBtn) micBtn.classList.remove('listening');
