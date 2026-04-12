@@ -1299,19 +1299,83 @@ async function sendMessage(){
     messages.appendChild(aiMsg);
     messages.scrollTop=messages.scrollHeight;
 
-    // Typewriter effect — then auto speak
-    const textEl=aiMsg.querySelector('.msg-text');
-    let i=0;
-    const typeInterval=setInterval(()=>{
-      if(i<reply.length){
-        textEl.textContent+=reply[i++];
-        messages.scrollTop=messages.scrollHeight;
-      } else {
-        clearInterval(typeInterval);
-        // Auto speak when typing completes
-        speakText(reply);
+    // Split reply into sentences on . ? !
+    const textEl = aiMsg.querySelector('.msg-text');
+    const sentences = reply.match(/[^.!?]+[.!?]+[\s]*/g) || [reply];
+    // If no punctuation found, just use the whole reply as one chunk
+    const ttsQueue = [...sentences];
+
+    let sentenceIndex = 0;
+    let charIndex = 0;
+    let currentSentenceTyped = '';
+    let isSpeaking = false;
+    const ttsAudioQueue = [];
+
+    // Pre-fetch TTS for all sentences immediately
+    async function prefetchTTS(text){
+      try {
+        const res = await fetch('/.netlify/functions/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: text.trim() })
+        });
+        if(!res.ok) return null;
+        const data = await res.json();
+        const audioBytes = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
+        const blob = new Blob([audioBytes], { type: 'audio/mpeg' });
+        return URL.createObjectURL(blob);
+      } catch(e){ return null; }
+    }
+
+    // Start pre-fetching all sentences in parallel
+    const urlPromises = ttsQueue.map(s => prefetchTTS(s));
+
+    function playNextInQueue(urls, index){
+      if(index >= urls.length) {
+        // All done — re-activate mic if in conversation mode
+        if(conversationMode) startMic();
+        return;
       }
-    },18);
+      const url = urls[index];
+      if(!url){ playNextInQueue(urls, index+1); return; }
+      const audio = new Audio(url);
+      currentAudio = audio;
+      setWaveformActive(true);
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        currentAudio = null;
+        if(index === urls.length - 1){
+          setWaveformActive(false);
+          if(conversationMode) startMic();
+        } else {
+          playNextInQueue(urls, index+1);
+        }
+      };
+      audio.onerror = () => {
+        currentAudio = null;
+        playNextInQueue(urls, index+1);
+      };
+      audio.play();
+    }
+
+    // Type all sentences, then play audio queue when all fetched
+    const typeInterval = setInterval(()=>{
+      const currentSentence = ttsQueue[sentenceIndex] || '';
+      if(charIndex < currentSentence.length){
+        textEl.textContent += currentSentence[charIndex++];
+        messages.scrollTop = messages.scrollHeight;
+      } else {
+        sentenceIndex++;
+        charIndex = 0;
+        if(sentenceIndex >= ttsQueue.length){
+          clearInterval(typeInterval);
+          // All typed — now play audio as it becomes ready
+          Promise.all(urlPromises).then(urls => {
+            playNextInQueue(urls, 0);
+          });
+        }
+      }
+    }, 18);
 
   } catch(err){
     if(thinking) thinking.classList.remove('show');
@@ -1363,7 +1427,7 @@ async function speakText(text){
   } catch(err) {
     console.error('TTS error:', err);
     setWaveformActive(false);
-    if(conversationMode) startCountdownThenListen();
+    if(conversationMode) startMic();
   }
 }
 
