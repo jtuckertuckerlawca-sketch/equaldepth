@@ -1375,7 +1375,7 @@ let silenceTimer = null;
 let audioContext = null;
 let analyser = null;
 let silenceStart = null;
-const SILENCE_DURATION = 1200; // 1.2 seconds of silence triggers stop
+const SILENCE_DURATION = 2000; // 2 seconds of silence triggers stop
 
 function toggleMic(){
   if(isListening){
@@ -1418,7 +1418,7 @@ async function startMic(){
         sum += val*val;
       }
       const rms = Math.sqrt(sum/dataArray.length);
-      if(rms < 0.015){ // silence threshold
+      if(rms < 0.025){ // silence threshold — raised to ignore breathing/pauses
         if(!silenceStart) silenceStart = Date.now();
         else if(Date.now() - silenceStart > SILENCE_DURATION){
           clearInterval(silenceInterval);
