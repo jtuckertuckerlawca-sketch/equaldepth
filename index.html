@@ -405,7 +405,14 @@ html,body {
 
 .ai-input-row {
   display:flex; border-top:1px solid var(--border);
+  align-items:center;
 }
+.ai-countdown {
+  font-size:.65rem; letter-spacing:.1em;
+  color:var(--cyan); min-width:24px; text-align:center;
+  display:none; font-family:'Space Mono',monospace;
+}
+.ai-countdown.show { display:block; }
 .ai-input {
   flex:1; background:transparent; border:none; outline:none;
   color:white; font-family:'Space Mono',monospace;
@@ -887,6 +894,7 @@ html,body {
     <div class="ai-thinking" id="ai-thinking"><span class="typing-dots"><span></span><span></span><span></span></span></div>
     <div class="ai-input-row">
       <input class="ai-input" id="ai-input" placeholder="Ask Depth..." autocomplete="off"/>
+      <div class="ai-countdown" id="ai-countdown"></div>
       <button class="ai-mic-btn" id="ai-mic-btn" onclick="toggleMic()" title="Speak to Depth">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="9" y="2" width="6" height="11" rx="3"/>
@@ -1193,6 +1201,9 @@ function closePanel(){
   // Stop any voice playing
   if(currentAudio){ currentAudio.pause(); currentAudio = null; }
   if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+  conversationMode = false;
+  cancelCountdown();
+  if(audioContext){ audioContext.close(); audioContext = null; }
   setTimeout(()=>{ panelContent.innerHTML=''; },800);
 }
 
@@ -1317,14 +1328,13 @@ async function sendMessage(){
 
 // ── VOICE: ELEVENLABS TTS ──
 let currentAudio = null;
+let conversationMode = false; // true when mic was used — keeps conversation going
 
 async function speakText(text){
-  // Stop any currently playing audio
   if(currentAudio){
     currentAudio.pause();
     currentAudio = null;
   }
-  // Animate portrait mark while speaking
   setWaveformActive(true);
   try {
     const res = await fetch('/.netlify/functions/tts', {
@@ -1334,7 +1344,6 @@ async function speakText(text){
     });
     if(!res.ok) throw new Error('TTS failed');
     const data = await res.json();
-    // Decode base64 audio and play
     const audioBytes = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
     const blob = new Blob([audioBytes], { type: 'audio/mpeg' });
     const url = URL.createObjectURL(blob);
@@ -1344,27 +1353,76 @@ async function speakText(text){
       setWaveformActive(false);
       URL.revokeObjectURL(url);
       currentAudio = null;
+      // Auto re-activate mic after Depth finishes speaking
+      if(conversationMode) startCountdownThenListen();
     };
     audio.onerror = () => {
       setWaveformActive(false);
       currentAudio = null;
+      if(conversationMode) startCountdownThenListen();
     };
     audio.play();
   } catch(err) {
     console.error('TTS error:', err);
     setWaveformActive(false);
+    if(conversationMode) startCountdownThenListen();
   }
+}
+
+// ── COUNTDOWN THEN LISTEN ──
+let countdownTimer = null;
+
+function startCountdownThenListen(){
+  const countdown = document.getElementById('ai-countdown');
+  if(!countdown) return;
+  let count = 3;
+  countdown.textContent = count;
+  countdown.classList.add('show');
+  countdownTimer = setInterval(()=>{
+    count--;
+    if(count <= 0){
+      clearInterval(countdownTimer);
+      countdown.classList.remove('show');
+      countdown.textContent = '';
+      startMic();
+    } else {
+      countdown.textContent = count;
+    }
+  }, 1000);
+}
+
+function cancelCountdown(){
+  if(countdownTimer){ clearInterval(countdownTimer); countdownTimer = null; }
+  const countdown = document.getElementById('ai-countdown');
+  if(countdown){ countdown.classList.remove('show'); countdown.textContent = ''; }
 }
 
 // ── VOICE: ELEVENLABS STT ──
 let mediaRecorder = null;
 let audioChunks = [];
 let isListening = false;
+let silenceTimer = null;
+let audioContext = null;
+let analyser = null;
+let silenceStart = null;
+const SILENCE_DURATION = 3000; // 3 seconds
 
 function toggleMic(){
   if(isListening){
+    // Manual stop — exit conversation mode
+    conversationMode = false;
+    cancelCountdown();
     stopMic();
   } else {
+    // Manual start — enter conversation mode
+    // Stop Depth mid-sentence if speaking
+    if(currentAudio){
+      currentAudio.pause();
+      currentAudio = null;
+      setWaveformActive(false);
+    }
+    cancelCountdown();
+    conversationMode = true;
     startMic();
   }
 }
@@ -1374,20 +1432,56 @@ async function startMic(){
   const input  = document.getElementById('ai-input');
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    // Set up silence detection via Web Audio API
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 512;
+    const source = audioContext.createMediaStreamSource(stream);
+    source.connect(analyser);
+    const dataArray = new Uint8Array(analyser.fftSize);
+    silenceStart = null;
+
+    // Poll for silence
+    const silenceInterval = setInterval(()=>{
+      if(!isListening){ clearInterval(silenceInterval); return; }
+      analyser.getByteTimeDomainData(dataArray);
+      // Calculate RMS volume
+      let sum = 0;
+      for(let i=0;i<dataArray.length;i++){
+        const val = (dataArray[i]-128)/128;
+        sum += val*val;
+      }
+      const rms = Math.sqrt(sum/dataArray.length);
+      if(rms < 0.015){ // silence threshold
+        if(!silenceStart) silenceStart = Date.now();
+        else if(Date.now() - silenceStart > SILENCE_DURATION){
+          clearInterval(silenceInterval);
+          stopMic();
+        }
+      } else {
+        silenceStart = null; // reset on sound
+      }
+    }, 100);
+
     mediaRecorder = new MediaRecorder(stream);
     audioChunks = [];
     mediaRecorder.ondataavailable = e => {
       if(e.data.size > 0) audioChunks.push(e.data);
     };
     mediaRecorder.onstop = async () => {
-      // Stop all tracks
       stream.getTracks().forEach(t => t.stop());
-      if(micBtn) { micBtn.classList.remove('listening'); }
-      if(input)  { input.placeholder = 'Transcribing...'; }
+      if(audioContext){ audioContext.close(); audioContext = null; }
+      if(micBtn) micBtn.classList.remove('listening');
+      if(input)  input.placeholder = 'Transcribing...';
       isListening = false;
+      // Only transcribe if we have meaningful audio
+      if(audioChunks.length === 0){ 
+        if(input) input.placeholder = 'Ask Depth...';
+        return; 
+      }
       try {
         const blob = new Blob(audioChunks, { type: 'audio/webm' });
-        // Convert to base64
         const reader = new FileReader();
         reader.onloadend = async () => {
           const base64 = reader.result.split(',')[1];
@@ -1398,24 +1492,27 @@ async function startMic(){
           });
           const data = await res.json();
           const transcript = data.transcript || '';
-          if(input) {
+          if(input){
             input.value = transcript;
             input.placeholder = 'Ask Depth...';
           }
           if(transcript.trim()) sendMessage();
+          else if(conversationMode) startCountdownThenListen();
         };
         reader.readAsDataURL(blob);
       } catch(err) {
         console.error('STT error:', err);
         if(input) input.placeholder = 'Ask Depth...';
+        if(conversationMode) startCountdownThenListen();
       }
     };
-    mediaRecorder.start();
+    mediaRecorder.start(250); // collect in 250ms chunks
     isListening = true;
     if(micBtn) micBtn.classList.add('listening');
     if(input)  input.placeholder = 'Listening...';
   } catch(err) {
     console.error('Mic error:', err);
+    conversationMode = false;
     alert('Microphone access is required. Please allow microphone access and try again.');
   }
 }
