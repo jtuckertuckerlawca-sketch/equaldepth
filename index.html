@@ -894,7 +894,6 @@ html,body {
     <div class="ai-thinking" id="ai-thinking"><span class="typing-dots"><span></span><span></span><span></span></span></div>
     <div class="ai-input-row">
       <input class="ai-input" id="ai-input" placeholder="Ask Depth..." autocomplete="off"/>
-      <div class="ai-countdown" id="ai-countdown"></div>
       <button class="ai-mic-btn" id="ai-mic-btn" onclick="toggleMic()" title="Speak to Depth">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="9" y="2" width="6" height="11" rx="3"/>
@@ -1202,7 +1201,6 @@ function closePanel(){
   if(currentAudio){ currentAudio.pause(); currentAudio = null; }
   if(mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
   conversationMode = false;
-  cancelCountdown();
   if(audioContext){ audioContext.close(); audioContext = null; }
   setTimeout(()=>{ panelContent.innerHTML=''; },800);
 }
@@ -1353,13 +1351,13 @@ async function speakText(text){
       setWaveformActive(false);
       URL.revokeObjectURL(url);
       currentAudio = null;
-      // Auto re-activate mic after Depth finishes speaking
-      if(conversationMode) startCountdownThenListen();
+      // Instantly re-activate mic after Depth finishes
+      if(conversationMode) startMic();
     };
     audio.onerror = () => {
       setWaveformActive(false);
       currentAudio = null;
-      if(conversationMode) startCountdownThenListen();
+      if(conversationMode) startMic();
     };
     audio.play();
   } catch(err) {
@@ -1367,34 +1365,6 @@ async function speakText(text){
     setWaveformActive(false);
     if(conversationMode) startCountdownThenListen();
   }
-}
-
-// ── COUNTDOWN THEN LISTEN ──
-let countdownTimer = null;
-
-function startCountdownThenListen(){
-  const countdown = document.getElementById('ai-countdown');
-  if(!countdown) return;
-  let count = 3;
-  countdown.textContent = count;
-  countdown.classList.add('show');
-  countdownTimer = setInterval(()=>{
-    count--;
-    if(count <= 0){
-      clearInterval(countdownTimer);
-      countdown.classList.remove('show');
-      countdown.textContent = '';
-      startMic();
-    } else {
-      countdown.textContent = count;
-    }
-  }, 1000);
-}
-
-function cancelCountdown(){
-  if(countdownTimer){ clearInterval(countdownTimer); countdownTimer = null; }
-  const countdown = document.getElementById('ai-countdown');
-  if(countdown){ countdown.classList.remove('show'); countdown.textContent = ''; }
 }
 
 // ── VOICE: ELEVENLABS STT ──
@@ -1405,23 +1375,18 @@ let silenceTimer = null;
 let audioContext = null;
 let analyser = null;
 let silenceStart = null;
-const SILENCE_DURATION = 3000; // 3 seconds
+const SILENCE_DURATION = 1200; // 1.2 seconds of silence triggers stop
 
 function toggleMic(){
   if(isListening){
-    // Manual stop — exit conversation mode
     conversationMode = false;
-    cancelCountdown();
     stopMic();
   } else {
-    // Manual start — enter conversation mode
-    // Stop Depth mid-sentence if speaking
     if(currentAudio){
       currentAudio.pause();
       currentAudio = null;
       setWaveformActive(false);
     }
-    cancelCountdown();
     conversationMode = true;
     startMic();
   }
@@ -1497,13 +1462,13 @@ async function startMic(){
             input.placeholder = 'Ask Depth...';
           }
           if(transcript.trim()) sendMessage();
-          else if(conversationMode) startCountdownThenListen();
+          else if(conversationMode) startMic();
         };
         reader.readAsDataURL(blob);
       } catch(err) {
         console.error('STT error:', err);
         if(input) input.placeholder = 'Ask Depth...';
-        if(conversationMode) startCountdownThenListen();
+        if(conversationMode) startMic();
       }
     };
     mediaRecorder.start(250); // collect in 250ms chunks
