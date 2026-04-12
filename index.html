@@ -1470,27 +1470,32 @@ async function startMic(){
     source.connect(analyser);
     const dataArray = new Uint8Array(analyser.fftSize);
     silenceStart = null;
+    let speechDetected = false; // gate — don't count silence until real speech heard
 
     // Poll for silence
     const silenceInterval = setInterval(()=>{
       if(!isListening){ clearInterval(silenceInterval); return; }
       analyser.getByteTimeDomainData(dataArray);
-      // Calculate RMS volume
       let sum = 0;
       for(let i=0;i<dataArray.length;i++){
         const val = (dataArray[i]-128)/128;
         sum += val*val;
       }
       const rms = Math.sqrt(sum/dataArray.length);
-      if(rms < 0.025){ // silence threshold — raised to ignore breathing/pauses
+
+      if(rms > 0.06){
+        // Clear speech detected — open the silence gate
+        speechDetected = true;
+        silenceStart = null;
+      } else if(speechDetected && rms < 0.03){
+        // Only count silence AFTER real speech has been detected
         if(!silenceStart) silenceStart = Date.now();
         else if(Date.now() - silenceStart > SILENCE_DURATION){
           clearInterval(silenceInterval);
           stopMic();
         }
-      } else {
-        silenceStart = null; // reset on sound
       }
+      // If no speech detected yet, ignore everything — wait for real words
     }, 100);
 
     mediaRecorder = new MediaRecorder(stream);
