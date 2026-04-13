@@ -185,6 +185,7 @@ html,body {
   text-align:center;
 }
 #company-name br { display:none; }
+#company-name span { display:inline; }
 #logo-hub:hover #company-name,
 #logo-hub.labels-visible #company-name {
   color:rgba(255,255,255,0.82);
@@ -508,13 +509,15 @@ html,body {
   #company-name {
     font-size:1.6rem;
     letter-spacing:.15em;
-    top:-100px;
+    top:-110px;
     white-space:normal;
     text-align:center;
     width:280px;
-    line-height:1.8;
+    display:flex;
+    flex-direction:column;
+    gap:.6em;
   }
-  #company-name br { display:block; }
+  #company-name br { display:none; }
   /* Hide desktop nav labels completely on mobile */
   .nav-label { display:none !important; }
 
@@ -691,7 +694,7 @@ html,body {
     <div class="nav-label" data-section="contact">Contact</div>
 
     <!-- Company name — dim, brightens on logo hover -->
-    <div id="company-name">Equal&nbsp;Depth<br>Analytics</div>
+    <div id="company-name"><span>Equal&nbsp;Depth</span>&nbsp;<span>Analytics</span></div>
 
     <!-- The mark -->
     <svg class="logo-svg" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
